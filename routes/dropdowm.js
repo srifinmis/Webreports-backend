@@ -23,8 +23,8 @@ router.get("/:dropdownType", async (req, res) => {
           columnName = "Cluster";
           break;
         case "Borrower Master Report":
-          query = "SELECT DISTINCT cluster_name FROM srifin_customer_master";
-          columnName = "cluster_name";
+          query = "SELECT DISTINCT cluster name FROM srifincredit_views.srifin_customer_master";
+          columnName = "cluster name";
           break;
         case "Credit Report":
           query = "SELECT DISTINCT ClusterID_name FROM vw_process_credit_report";

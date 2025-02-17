@@ -1,94 +1,4 @@
-// // server.js (Backend)
 
-// const express = require('express');
-// const bodyParser = require('body-parser');
-// const reportService = require('./services/reportService'); // Import service functions
-// const path = require('path');
-// const fs = require('fs');
-// const app = express();
-// const port = process.env.PORT || 5000;
-
-// app.use(bodyParser.json());
-
-// // Ensure the 'downloads' folder exists
-// const downloadDir = path.join(__dirname, 'downloads');
-// if (!fs.existsSync(downloadDir)) {
-//   fs.mkdirSync(downloadDir);
-//   console.log("Created 'downloads' folder.");
-// }
-
-// // Handle report requests
-// app.post('/api/reports', async (req, res) => {
-//   const {
-//     reportType,
-//     branchId,
-//     branch_name,
-//     clusterName,
-//     creditAppStatus,
-//     region,
-//     appStatus,
-//     appDate,
-//     areaIdName,
-//     regionIdName,
-//   } = req.body;
-
-//   try {
-//     let reportData;
-//     let filePath;
-
-//     // Handle each report type and generate the report
-//     switch (reportType) {
-//       case 'Fore Closure Report':
-//         reportData = await reportService.generateForeClosureReport(branchId, region);
-//         break;
-//       case 'Borrower Master Report':
-//         reportData = await reportService.generateBorrowerMasterReport(branch_name, clusterName);
-//         break;
-//       case 'Credit Report':
-//         reportData = await reportService.generateCreditReport(creditAppStatus, region);
-//         break;
-//       case 'Loan Application Report':
-//         reportData = await reportService.generateLoanApplicationReport(appStatus, appDate, branch_name);
-//         break;
-//       case 'Employee Master Report':
-//         reportData = await reportService.generateEmployeeMasterReport(branchId, areaIdName, regionIdName);
-//         break;
-//       case 'Death Report':
-//         reportData = await reportService.generateDeathReportWithColumns(branchId, clusterName, region);
-//         break;
-//       default:
-//         return res.status(400).json({ errors: 'Invalid report type.' });
-//     }
-
-//     // Generate the report file
-//     filePath = await reportService.createReportFile(reportData, reportType.replace(/ /g, '_').toLowerCase());
-
-//     console.log("File path for download:", filePath);  // Log the file path to ensure it's correct
-
-//     // Ensure the file exists before attempting to download
-//     if (fs.existsSync(filePath)) {
-//       // Send the file as a download
-//       res.status(200).download(filePath, (err) => {
-//         if (err) {
-//           console.error("Error downloading the file:", err);
-//           res.status(500).json({ errors: 'Error while downloading the report.' });
-//         }
-//         // Optional: delete the file after download (cleaning up)
-//         fs.unlinkSync(filePath);
-//       });
-//     } else {
-//       console.error("File not found:", filePath);
-//       res.status(500).json({ errors: 'File not found.' });
-//     }
-//   } catch (error) {
-//     console.error("Error generating report:", error);
-//     res.status(500).json({ errors: error.message });
-//   }
-// });
-
-// app.listen(port, () => {
-//   console.log(`Server running on http://localhost:${port}`);
-// });
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
@@ -121,10 +31,13 @@ app.get("/api/reports", async (req, res) => {
     branch,
     region,
     cluster,
+    clusters,
     area,
-    creditAppStatus,
+    creditAppStatuses,
     appStatus,
     employeeStatus,
+    app_status,
+    branches,
     appStartDate,
     appEndDate,
   } = req.query;
@@ -132,13 +45,13 @@ app.get("/api/reports", async (req, res) => {
   try {
     switch (reportType) {
       case "Loan Application Report":
-        return await reportService.generateLoanApplicationReport(branch, appStatus, res);
+        return await reportService.generateLoanApplicationReport(branches, app_status, res);
 
       case "Borrower Master Report":
-        return await reportService.generateBorrowerMasterReport(branch, cluster, res);
+        return await reportService.generateBorrowerMasterReport(branch, clusters, res);
 
       case "Credit Report":
-        return await reportService.generateCreditReport(branch, creditAppStatus, res);
+        return await reportService.generateCreditReport(branch, creditAppStatuses, res);
 
       case "Fore Closure Report":
         return await reportService.generateForeClosureReport(branch, region, res);
@@ -164,13 +77,14 @@ app.post("/api/reports", async (req, res) => {
 
   const {
     reportType,
-    branch,
-    region,
-    cluster,
-    area,
+    branches,
+    regions,
+    clusters,
+    areas,
     creditAppStatus,
     appStatus,
-    employeeStatus,
+    employeeStatuses,
+    app_status,
     appStartDate,
     appEndDate,
   } = req.body;
@@ -178,22 +92,22 @@ app.post("/api/reports", async (req, res) => {
   try {
     switch (reportType) {
       case "Loan Application Report":
-        return await reportService.generateLoanApplicationReport(branch, appStatus, appStartDate, appEndDate, res);
+        return await reportService.generateLoanApplicationReport(branches, app_status, appStartDate, appEndDate, res);
 
       case "Borrower Master Report":
-        return await reportService.generateBorrowerMasterReport(branch, cluster, res);
+        return await reportService.generateBorrowerMasterReport(branches, clusters, res);
 
       case "Credit Report":
-        return await reportService.generateCreditReport(branch, creditAppStatus, appStartDate, appEndDate, res);
+        return await reportService.generateCreditReport(branches, creditAppStatus, appStartDate, appEndDate, res);
 
       case "Fore Closure Report":
-        return await reportService.generateForeClosureReport(branch, region, res);
+        return await reportService.generateForeClosureReport(branches, regions, res);
 
       case "Employee Master Report":
-        return await reportService.generateEmployeeMasterReport(branch, area, region, cluster, employeeStatus, res);
+        return await reportService.generateEmployeeMasterReport(branches, areas, regions, clusters, employeeStatuses, res);
 
       case "Death Report":
-        return await reportService.generateDeathReport(branch, cluster, region, appStartDate, appEndDate, res);
+        return await reportService.generateDeathReport(branches, clusters, regions, res);
 
       default:
         return res.status(400).json({ error: "Invalid report type." });
