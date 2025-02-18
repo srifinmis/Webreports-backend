@@ -1,0 +1,3 @@
+[2025-02-18T05:22:44.836Z] SELECT header, trail FROM srifincredit_views.vw_srifin_cic_report_types WHERE report_type='Equifax'
+[2025-02-18T05:22:47.517Z] UPDATE srifincredit_views.srifin_loan_details_cutoffdate SET cutoff_date = DATE '2025-01-31'
+[2025-02-18T05:22:55.500Z] SELECT * FROM srifincredit_views.vw_cic_base_data WHERE CAST(cycledate AS DATE) = DATE '2025-01-31' AND CAST(disb_date AS DATE) BETWEEN DATE '2023-01-01' AND DATE '2025-01-31'
