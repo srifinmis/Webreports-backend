@@ -365,8 +365,138 @@ app.post("/get-report-header-trailer", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+  app.get("/api/dropdown-data-loan", async (req, res) => {
+  try {
+    // Queries for fetching distinct values
+    const queries = {
+      zones: `SELECT DISTINCT "zone name" FROM srifincredit_views.srifin_loan_details`,
+      clusters: `SELECT DISTINCT "cluster name" AS value FROM srifincredit_views.srifin_loan_details`,
+      regions: `SELECT DISTINCT "region name" AS value FROM srifincredit_views.srifin_loan_details`,
+      branches: `SELECT DISTINCT "branch name" AS value FROM srifincredit_views.srifin_loan_details`,
+      customers: `SELECT DISTINCT "customer_id" AS value FROM srifincredit_views.srifin_loan_details`,
+      loanApplications: `SELECT DISTINCT "loan_application_id" AS value FROM srifincredit_views.srifin_loan_details`,
+      statuses: `SELECT DISTINCT "IS_Dead" AS value FROM srifincredit_views.srifin_loan_details`
+    };
 
-// Catch-all route for debugging
+  const dropdownData = {};
+
+  for (const [key, query] of Object.entries(queries)) {
+    try {
+      const result = await queryAthena(query); // Executing one query at a time
+      dropdownData[key] = result.slice(1).map((item) => item.column1).filter(Boolean); // Removing null values
+    } catch (error) {
+      console.error(`Error fetching ${key}:`, error);
+      dropdownData[key] = []; // If an error occurs, return an empty array
+    }
+  }
+
+  res.json(dropdownData);
+} catch (error) {
+  console.error("Error fetching dropdowns:", error);
+  res.status(500).json({ error: error.message });
+}
+});
+
+
+
+app.post("/generate-loan-details-report", async (req, res) => {
+  const { zoneName, clusterName, regionName, branchName, customerId, loanApplicationId, isDead } = req.body;
+  
+  if (!branchName) {
+    return res.status(400).json({ error: "Branch Name is required" });
+  }
+  
+  try {
+    let query = `
+      SELECT * FROM srifincredit_views.srifin_loan_details 
+      WHERE "branch name" = '${branchName}'
+      `;
+  
+      if (zoneName) query += ` AND "zone name" = '${zoneName}'`;
+      if (clusterName) query += ` AND "cluster name" = '${clusterName}'`;
+      if (regionName) query += ` AND "region name" = '${regionName}'`;
+      if (customerId) query += ` AND customer_id = '${customerId}'`;
+      if (loanApplicationId) query += ` AND loan_application_id = '${loanApplicationId}'`;
+      if (isDead) query += ` AND is_dead = '${isDead}'`;
+  
+      console.log("Executing Athena Query:", query);
+  
+      const result = await queryAthena(query);
+  
+      if (!result || result.length === 0) {
+        return res.status(404).json({ error: "No data found" });
+      }
+  
+      res.status(200).json(result.slice(1));
+    } catch (error) {
+      console.error("Error generating loan details report:", error);
+      res.status(500).json({ error: error.message });
+  }
+});
+app.get("/api/dropdown-data-luc", async (req, res) => {
+  try {
+    const queries = {
+      zones: `SELECT DISTINCT "zone name" AS value FROM srifincredit_views.vw_luc_report`,
+      clusters: `SELECT DISTINCT "cluster name" AS value FROM srifincredit_views.vw_luc_report`,
+      regions: `SELECT DISTINCT "region name" AS value FROM srifincredit_views.vw_luc_report`,
+      branches: `SELECT DISTINCT "branch name" AS value FROM srifincredit_views.vw_luc_report`,
+    };
+
+    const dropdownData = {};
+
+    for (const [key, query] of Object.entries(queries)) {
+      try {
+        const result = await queryAthena(query); // Executing one query at a time
+        dropdownData[key] = result.slice(1).map((item) => item.column1).filter(Boolean); // Removing null values
+      } catch (error) {
+        console.error(`Error fetching ${key}:`, error);
+        dropdownData[key] = []; // If an error occurs, return an empty array
+      }
+    }
+
+    res.json(dropdownData);
+  } catch (error) {
+    console.error("Error fetching dropdowns:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/generate-luc-details-report", async (req, res) => {
+  const { zoneName, clusterName, regionName, branchName, customerId, lucApplicationId, isDead } = req.body;
+
+  if (!branchName) {
+    return res.status(400).json({ error: "Branch Name is required" });
+  }
+
+  try {
+    let query = `
+      SELECT * FROM srifincredit_views.vw_luc_report 
+      WHERE "branch name" = '${branchName}'
+      `;
+
+    if (zoneName) query += ` AND "zone name" = '${zoneName}'`;
+    if (clusterName) query += ` AND "cluster name" = '${clusterName}'`;
+    if (regionName) query += ` AND "region name" = '${regionName}'`;
+    if (customerId) query += ` AND customer_id = '${customerId}'`;
+    
+    console.log("Executing Athena Query:", query);
+
+    const result = await queryAthena(query);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "No data found" });
+    }
+
+    res.status(200).json(result.slice(1));
+  } catch (error) {
+    console.error("Error generating LUC details report:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+  
+
+
 app.use((req, res) => {
   console.log(`Unhandled request: ${req.method} ${req.url}`);
   res.status(404).json({ error: "Route not found" });
