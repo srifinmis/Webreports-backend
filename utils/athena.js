@@ -25,7 +25,7 @@ const logQuery = (query) => {
         if (state === 'SUCCEEDED') break;
         if (state === 'FAILED' || state === 'CANCELLED') throw new Error(`Query ${state}`);
   
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
       let results = [];
       let nextToken = null;
