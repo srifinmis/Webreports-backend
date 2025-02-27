@@ -10,7 +10,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@aws-sdk/client-athena": "^3.738.0",
+    "@aws-sdk/client-athena": "^3.750.0",
     "@aws-sdk/client-dynamodb": "^3.738.0",
     "@aws-sdk/client-s3": "^3.738.0",
     "@aws-sdk/credential-provider-env": "^3.734.0",

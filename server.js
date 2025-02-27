@@ -23,73 +23,73 @@ app.use((req, res, next) => {
 app.use("/api/dropdowns", dropdownRoutes);
 
 // Reports Route (GET)
-app.get("/api/reports", async (req, res) => {
-  console.log("Received GET report request:", req.query);
+// app.get("/api/reports", async (req, res) => {
+//   console.log("Received GET report request:", req.query);
 
-  const { reportType, branch, region, cluster, clusters, area, creditAppStatuses, app_status, branches, appStartDate, appEndDate } = req.query;
+//   const { reportType, branch, region, cluster, clusters, area, creditAppStatuses, app_status, branches, appStartDate, appEndDate } = req.query;
 
-  try {
-    switch (reportType) {
-      case "Loan Application Report":
-        return await reportService.generateLoanApplicationReport(branches, app_status, res);
+//   try {
+//     switch (reportType) {
+//       case "Loan Application Report":
+//         return await reportService.generateLoanApplicationReport(branches, app_status, res);
 
-      case "Borrower Master Report":
-        return await reportService.generateBorrowerMasterReport(branch, clusters, res);
+//       case "Borrower Master Report":
+//         return await reportService.generateBorrowerMasterReport(branch, clusters, res);
 
-      case "Credit Report":
-        return await reportService.generateCreditReport(branch, creditAppStatuses, res);
+//       case "Credit Report":
+//         return await reportService.generateCreditReport(branch, creditAppStatuses, res);
 
-      case "Fore Closure Report":
-        return await reportService.generateForeClosureReport(branch, region, res);
+//       case "Fore Closure Report":
+//         return await reportService.generateForeClosureReport(branch, region, res);
 
-      case "Employee Master Report":
-        return await reportService.generateEmployeeMasterReport(branch, area, region, cluster, req.query.employeeStatus, res);
+//       case "Employee Master Report":
+//         return await reportService.generateEmployeeMasterReport(branch, area, region, cluster, req.query.employeeStatus, res);
 
-      case "Death Report":
-        return await reportService.generateDeathReport(branch, cluster, region, res);
+//       case "Death Report":
+//         return await reportService.generateDeathReport(branch, cluster, region, res);
 
-      default:
-        return res.status(400).json({ error: "Invalid report type." });
-    }
-  } catch (error) {
-    console.error(`Error generating ${reportType}:`, error);
-    res.status(500).json({ error: error.message });
-  }
-});
+//       default:
+//         return res.status(400).json({ error: "Invalid report type." });
+//     }
+//   } catch (error) {
+//     console.error(`Error generating ${reportType}:`, error);
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
-app.post("/api/reports", async (req, res) => {
-  console.log("Received POST report request:", req.body);
+// app.post("/report", async (req, res) => {
+//   console.log("Received POST report request:", req.body);
 
-  const { reportType, branches, regions, clusters, areas, creditAppStatus, app_status, employeeStatuses, appStartDate, appEndDate } = req.body;
+//   const { reportType, branches, regions, clusters, areas, creditAppStatus, app_status, employeeStatuses, appStartDate, appEndDate } = req.body;
 
-  try {
-    switch (reportType) {
-      case "Loan Application Report":
-        return await reportService.generateLoanApplicationReport(branches, app_status, appStartDate, appEndDate, res);
+//   try {
+//     switch (reportType) {
+//       case "Loan Application Report":
+//         return await reportService.generateLoanApplicationReport(branches, app_status, appStartDate, appEndDate, res);
 
-      case "Borrower Master Report":
-        return await reportService.generateBorrowerMasterReport(branches, clusters, res);
+//       case "Borrower Master Report":
+//         return await reportService.generateBorrowerMasterReport(branches, clusters, res);
 
-      case "Credit Report":
-        return await reportService.generateCreditReport(branches, creditAppStatus, appStartDate, appEndDate, res);
+//       case "Credit Report":
+//         return await reportService.generateCreditReport(branches, creditAppStatus, appStartDate, appEndDate, res);
 
-      case "Fore Closure Report":
-        return await reportService.generateForeClosureReport(branches, regions, res);
+//       case "Fore Closure Report":
+//         return await reportService.generateForeClosureReport(branches, regions, res);
 
-      case "Employee Master Report":
-        return await reportService.generateEmployeeMasterReport(branches, areas, regions, clusters, employeeStatuses, res);
+//       case "Employee Master Report":
+//         return await reportService.generateEmployeeMasterReport(branches, areas, regions, clusters, employeeStatuses, res);
 
-      case "Death Report":
-        return await reportService.generateDeathReport(branches, clusters, regions, res);
+//       case "Death Report":
+//         return await reportService.generateDeathReport(branches, clusters, regions, res);
 
-      default:
-        return res.status(400).json({ error: "Invalid report type." });
-    }
-  } catch (error) {
-    console.error(`Error generating ${reportType}:`, error);
-    res.status(500).json({ error: error.message });
-  }
-});
+//       default:
+//         return res.status(400).json({ error: "Invalid report type." });
+//     }
+//   } catch (error) {
+//     console.error(`Error generating ${reportType}:`, error);
+//     res.status(500).json({ error: error.message });
+//   }
+// });
 
 app.post("/generate-report", async (req, res) => {
   const { fromDate, toDate, reportType, cutoff_date } = req.body;
@@ -396,8 +396,490 @@ app.post("/get-report-header-trailer", async (req, res) => {
   res.status(500).json({ error: error.message });
 }
 });
+app.get("/get-foreclosure-dropdowns", async (req, res) => {
+  try {
+    const queries = {
+      regions: `SELECT DISTINCT "region" AS value FROM srifincredit_views.vw_preclosure_report`,
+      branches: `SELECT DISTINCT "Branch_ID", "region" FROM srifincredit_views.vw_preclosure_report`,
+    };
+
+    const dropdownData = { branches: [], regions: [], branchRegionMap: {}, regionBranchMap: {} };
+
+    for (const [key, query] of Object.entries(queries)) {
+      try {
+        const result = await executeAthenaQuery(query); 
+        
+        if (key === "branches") {
+          result.forEach((row) => {
+            if (row.Branch_ID && row.region) {
+              dropdownData.branches.push(row.Branch_ID);
+              dropdownData.branchRegionMap[row.Branch_ID] = row.region;
+
+              // Populate regionBranchMap
+              if (!dropdownData.regionBranchMap[row.region]) {
+                dropdownData.regionBranchMap[row.region] = [];
+              }
+              dropdownData.regionBranchMap[row.region].push(row.Branch_ID);
+            }
+          });
+        } else {
+          dropdownData[key] = result.map((item) => item.value).filter(Boolean);
+        }
+      } catch (error) {
+        console.error(`Error fetching ${key}:`, error);
+        dropdownData[key] = [];
+      }
+    }
+
+    res.json(dropdownData);
+  } catch (error) {
+    console.error("Error fetching dropdowns:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+  app.get("/api/dropdown-data-deathreport", async (req, res) => {
+    try {
+      const query = `
+        SELECT DISTINCT "Branch" AS branch, "Cluster" AS cluster, "Region" AS region
+        FROM srifincredit_views.vw_own_death_report
+      `;
+
+      const result = await executeAthenaQuery(query);
+
+      const branchMap = {};
+      const branches = [];
+      const clusters = new Map();
+      const regions = new Map();
+
+      result.forEach(({ branch, cluster, region }) => {
+        if (branch) {
+          if (!branchMap[branch]) {
+            branchMap[branch] = { 
+              cluster: { name: cluster, id: cluster }, 
+              region: { name: region, id: region }
+            };
+            branches.push({ name: branch, id: branch });
+          }
+        }
+        if (cluster && !clusters.has(cluster)) {
+          clusters.set(cluster, { name: cluster, id: cluster });
+        }
+        if (region && !regions.has(region)) {
+          regions.set(region, { name: region, id: region, clusterId: cluster });
+        }
+      });
+
+      res.json({
+        branches,
+        clusters: Array.from(clusters.values()),
+        regions: Array.from(regions.values()),
+        branchMap
+      });
+    } catch (error) {
+      console.error("Error fetching dropdown data:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+// dropdown-data-loanapplication
+app.get("/api/dropdown-data-loanapplication", async (req, res) => {
+  try {
+    // Queries for fetching distinct values
+    const queries = {
+      branches: `SELECT DISTINCT "branch name" AS value FROM srifincredit_views.srifin_loan_applications_standardised`,
+      statuses: `SELECT DISTINCT "app_status" AS value FROM srifincredit_views.srifin_loan_applications_standardised`,
+      appDates: `SELECT DISTINCT "app_date" AS value FROM srifincredit_views.srifin_loan_applications_standardised`, // Added App Date
+    };
+
+    const dropdownData = {};
+
+    for (const [key, query] of Object.entries(queries)) {
+      try {
+        const result = await queryAthena(query);
+        dropdownData[key] = result.map((item) => item.column1).filter(Boolean);
+      } catch (error) {
+        console.error(`Error fetching ${key}:`, error);
+        dropdownData[key] = [];
+      }
+    }
+
+    res.json(dropdownData);
+  } catch (error) {
+    console.error("Error fetching dropdowns:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
+// dropdown-data-creditreport
+app.get("/api/dropdown-data-creditreport", async (req, res) => {
+  try {
+    // Queries for fetching distinct values
+    const queries = {
+      statuses: `SELECT DISTINCT "Credit_App_Status" AS value FROM srifincredit_views.vw_process_credit_report`,
+      branches: `SELECT DISTINCT "BranchID_Name" AS value FROM srifincredit_views.vw_process_credit_report`
+    };
+
+    const dropdownData = {};
+
+    for (const [key, query] of Object.entries(queries)) {
+      try {
+        const result = await queryAthena(query); // Executing query
+        dropdownData[key] = Array.isArray(result) ? result.map(item => item.column1).filter(Boolean) : [];
+      } catch (error) {
+        console.error(`Error fetching ${key}:`, error);
+        dropdownData[key] = []; // If an error occurs, return an empty array
+      }
+    }
+
+    res.json(dropdownData);
+  } catch (error) {
+    console.error("Error fetching dropdowns:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+app.get("/api/dropdown-data-employeemaster", async (req, res) => {
+  try {
+    const query = `
+      SELECT DISTINCT "BranchID_Name", "AreaID_Name", "RegionID_Name", "ClusterID_Name"
+      FROM srifincredit_views.vw_srifin_employee_master_report
+    `;
+
+    console.log("Executing Athena Query...");
+    const result = await queryAthena(query);
+
+    console.log("Athena Query Result Count:", result.length);
+    // console.log("Sample Data:", result.slice(0, 5)); // Check first 5 rows
+
+    if (!result || result.length === 0) {
+      console.warn("No data returned from Athena.");
+      return res.json({
+        branches: [],
+        areas: [],
+        regions: [],
+        clusters: [],
+        branchMappings: {},
+      });
+    }
+
+    const branchMappings = {};
+    const branches = new Set();
+    const areas = new Set();
+    const regions = new Set();
+    const clusters = new Set();
+
+    result.forEach((row, index) => {
+      // console.log(`Row ${index}:`, row); // Debugging log
+
+      // Map the correct column names
+      const branch = row["column1"]?.trim() || null;  // BranchID_Name
+      const area = row["column2"]?.trim() || null;    // AreaID_Name
+      const region = row["column3"]?.trim() || null;  // RegionID_Name
+      const cluster = row["column4"]?.trim() || null; // ClusterID_Name
+
+      if (branch) {
+        branches.add(branch);
+        if (!branchMappings[branch]) {
+          branchMappings[branch] = { area: null, region: null, cluster: null };
+        }
+        if (area) branchMappings[branch].area = area;
+        if (region) branchMappings[branch].region = region;
+        if (cluster) branchMappings[branch].cluster = cluster;
+      }
+      if (area) areas.add(area);
+      if (region) regions.add(region);
+      if (cluster) clusters.add(cluster);
+    });
+
+    const formatDropdownData = (items) =>
+      Array.from(items).map((item) => ({ label: item, id: item }));
+
+    const dropdownData = {
+      branches: formatDropdownData(branches),
+      areas: formatDropdownData(areas),
+      regions: formatDropdownData(regions),
+      clusters: formatDropdownData(clusters),
+      branchMappings,
+    };
+
+    console.log("Processed Dropdown Data:", JSON.stringify(dropdownData, null, 2));
+    res.json(dropdownData);
+  } catch (error) {
+    console.error("Error fetching dropdown data:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+app.post("/api/generate-employee-master-report", async (req, res) => {
+  const { branchID, areaID, regionID, clusterID, employeeStatus } = req.body;
+
+  try {
+    let query = `
+      SELECT * FROM srifincredit_views.vw_srifin_employee_master_report
+      WHERE 1=1
+    `;
+
+    if (branchID) {
+      query += ` AND "BranchID_Name" = '${branchID}'`;
+    }
+    if (areaID) {
+      query += ` AND "AreaID_Name" = '${areaID}'`;
+    }
+    if (regionID) {
+      query += ` AND "RegionID_Name" = '${regionID}'`;
+    }
+    if (clusterID) {
+      query += ` AND "ClusterID_Name" = '${clusterID}'`;
+    }
+    if (employeeStatus && employeeStatus.length > 0) {
+      const statusConditions = employeeStatus.map(status => `"Employee_Status" = '${status}'`).join(" OR ");
+      query += ` AND (${statusConditions})`;
+    }
+
+    console.log("Executing Athena Query:", query);
+
+    const result = await executeAthenaQuery(query);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "No data found" });
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error generating Employee Master Report:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/generate-deathreport", async (req, res) => {
+  const { Cluster, Region, Branch } = req.body;
+
+  try {
+    let conditions = [];
+    
+    // Only add conditions for fields that are provided
+    if (Cluster) conditions.push(`"Cluster" = '${Cluster.replace(/'/g, "''")}'`);
+    if (Region) conditions.push(`"Region" = '${Region.replace(/'/g, "''")}'`);
+    if (Branch) conditions.push(`"Branch" = '${Branch.replace(/'/g, "''")}'`);
+
+    // Construct WHERE clause dynamically
+    let whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    let query = `
+      SELECT * FROM srifincredit_views.vw_own_death_report
+      ${whereClause}
+    `;
+
+    console.log("Executing Athena Query:", query);
+
+    const result = await executeAthenaQuery(query);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "No data found" });
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error generating Death Report:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/dropdown-data-borrowermaster", async (req, res) => {
+  try {
+    const queries = {
+      branches: `SELECT DISTINCT "branch id", "branch name" FROM srifincredit_views.srifin_customer_master`,
+      clusters: `SELECT DISTINCT "cluster name" FROM srifincredit_views.srifin_customer_master`,
+      clusterBranchMap: `SELECT DISTINCT "cluster name", "branch name" FROM srifincredit_views.srifin_customer_master`,
+    };
+
+    const dropdownData = { branches: [], clusters: [], clusterBranchMap: {} };
+
+    for (const [key, query] of Object.entries(queries)) {
+      try {
+        console.log(`Executing Athena Query for ${key}:`, query); // Debugging Log
+        const result = await executeAthenaQuery(query);
+        console.log(`Athena Query Result for ${key}:`, result); // Log Results
+
+        if (key === "branches") {
+          dropdownData.branches = result
+            .filter(row => row["branch id"] && row["branch name"]) // Ensure both exist
+            .map(row => ({
+              BranchID: row["branch id"],
+              BranchName: row["branch name"],
+            }));
+        } else if (key === "clusters") {
+          dropdownData.clusters = result.map((item) => item["cluster name"]).filter(Boolean);
+        } else if (key === "clusterBranchMap") {
+          dropdownData.clusterBranchMap = result.reduce((acc, row) => {
+            if (row["cluster name"] && row["branch name"]) {
+              if (!acc[row["cluster name"]]) {
+                acc[row["cluster name"]] = [];
+              }
+              acc[row["cluster name"]].push(row["branch name"]); // Group branches under cluster
+            }
+            return acc;
+          }, {});
+        }
+      } catch (error) {
+        console.error(`Error fetching ${key}:`, error);
+        dropdownData[key] = key === "clusterBranchMap" ? {} : [];
+      }
+    }
+
+    console.log("Final Dropdown Data:", JSON.stringify(dropdownData, null, 2)); // Log Final Response
+    res.json(dropdownData);
+  } catch (error) {
+    console.error("Error fetching dropdowns:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/generate-foreclosure-report", async (req, res) => {
+  const { branchName, regionName } = req.body;
+
+  try {
+    // Prevent SQL injection
+    const formattedBranchName = branchName ? branchName.replace(/'/g, "''") : null;
+    const formattedRegionName = regionName ? regionName.replace(/'/g, "''") : null;
+
+    let query = `SELECT * FROM srifincredit_views.vw_preclosure_report WHERE 1=1`;
+
+    if (formattedBranchName) {
+      query += ` AND "Branch_ID" = '${formattedBranchName}'`;
+    }
+
+    if (formattedRegionName) {
+      query += ` AND "region" = '${formattedRegionName}'`;
+    }
+
+    console.log("Executing Athena Query:", query);
+
+    const result = await executeAthenaQuery(query);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "No data found" });
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error generating foreclosure report:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.post("/generate-creditreport", async (req, res) => {
+  const { branchID, creditAppStatus, startDate, endDate } = req.body;
+
+  if (!branchID || !startDate || !endDate) {
+    return res.status(400).json({ error: "Branch, Start Date, and End Date are required" });
+  }
+
+  try {
+    let query = `
+      SELECT * FROM srifincredit_views.vw_process_credit_report
+      WHERE "BranchID_Name" = '${branchID}'
+      AND "app_date" BETWEEN '${startDate}' AND '${endDate}'
+    `;
+
+    if (creditAppStatus) {
+      query += ` AND "Credit_App_Status" = '${creditAppStatus}'`;
+    }
+
+    console.log("Executing Athena Query:", query);
+
+    const result = await executeAthenaQuery(query);
+
+    console.log("Athena Query Result:", JSON.stringify(result, null, 2)); // Log API Response
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "No data found" });
+    }
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Error generating Credit Report:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+app.post("/generate-loanapplication-report", async (req, res) => {
+  const { branchName, appStatus, appDate } = req.body;
+
+  if (!branchName || !appDate?.start || !appDate?.end) {
+    return res.status(400).json({ error: "Branch Name, Start Date, and End Date are required" });
+  }
+
+  try {
+    // Safely format values to prevent SQL injection
+    const formattedBranchName = branchName.replace(/'/g, "''");
+    const formattedStartDate = appDate.start.replace(/'/g, "''");
+    const formattedEndDate = appDate.end.replace(/'/g, "''");
+
+    let query = `
+      SELECT * FROM srifincredit_views.srifin_loan_applications_standardised
+      WHERE "branch name" = '${formattedBranchName}'
+      AND CAST("app_date" AS DATE) BETWEEN DATE '${formattedStartDate}' AND DATE '${formattedEndDate}'
+    `;
+
+    if (appStatus && appStatus.length > 0) {
+      const formattedStatuses = appStatus.map(status => `'${status.replace(/'/g, "''")}'`).join(", ");
+      query += ` AND "app_status" IN (${formattedStatuses})`;
+    }
+
+    console.log("Executing Athena Query:", query);
+
+    // Use executeAthenaQuery instead of queryAthena
+    const result = await executeAthenaQuery(query);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "No data found" });
+    }
+
+    // Remove first column dynamically
+    const processedResult = result.map(row => {
+      const values = Object.values(row);
+      const [, ...newValues] = values; // Remove first column
+      const keys = Object.keys(row).slice(1); // Remove first column header
+      return Object.fromEntries(keys.map((key, i) => [key, newValues[i]]));
+    });
+
+    res.status(200).json(processedResult);
+  } catch (error) {
+    console.error("Error generating Loan Application Report:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+
+app.post("/generate-borrowermaster-report", async (req, res) => {
+  const { branchName } = req.body;
+
+  if (!branchName) {
+    return res.status(400).json({ error: "Branch Name is required" });
+  }
+
+  try {
+    let query = `
+      SELECT * FROM srifin_customer_master
+      WHERE "branch name" = '${branchName}'
+    `;
+
+    console.log("Executing Athena Query:", query);
+
+    const result = await executeAthenaQuery(query);
+
+    if (!result || result.length === 0) {
+      return res.status(404).json({ error: "No data found" });
+    }
+
+    res.status(200).json(result.slice(0));
+  } catch (error) {
+    console.error("Error generating Borrower Master Report:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.post("/generate-loan-details-report", async (req, res) => {
   const { zoneName, clusterName, regionName, branchName, customerId, loanApplicationId, isDead } = req.body;
