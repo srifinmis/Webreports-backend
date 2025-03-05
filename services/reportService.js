@@ -1,160 +1,250 @@
-// const AWS = require("aws-sdk");
-// const { createCSVFile } = require("../utils/fileutils");
-// const { executeAthenaQuery } = require("../utils/athenaUtils");
-// const { AthenaClient, StartQueryExecutionCommand, GetQueryResultsCommand } = require("@aws-sdk/client-athena");
+const { executeAthenaQuery } = require("../utils/athenaUtils");
 
-// AWS.config.update({
-//   region: process.env.AWS_REGION || "ap-south-1",
-//   accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-//   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-// });
+async function generateForeClosureReport(branchName, regionName) {
+  try {
+    console.log("🔍 Received Branch_ID:", branchName);
+    console.log("🔍 Received Region:", regionName);
 
-// // Format SQL values safely
-// const formatValue = (value) => (value ? `'${value.replace(/'/g, "''")}'` : "NULL");
+    const formattedBranchName = branchName ? branchName.replace(/\s+/g, "_") : null;
+    const formattedRegionName = regionName ? regionName.replace(/\s+/g, "_") : null;
 
-// const generateReportData = async (query) => {
-//   try {
-//     const results = await executeAthenaQuery(query);
-//     if (!results || results.length === 0) return null;
-//     return results;
-//   } catch (error) {
-//     console.error("Athena Query Execution Error:", error);
-//     return null;
-//   }
-// };
+    let query = `SELECT * FROM srifincredit_views.vw_preclosure_report`;
+    let conditions = [];
 
-// const createReportFile = async (reportData, filename) => {
-//   if (!reportData || reportData.length === 0) return null;
-//   try {
-//     return await createCSVFile(reportData, filename);
-//   } catch (error) {
-//     console.error("CSV File Creation Error:", error);
-//     return null;
-//   }
-// };
-// const handleReportRequest = async (query, filename, res, responseType) => {
-//   try {
-//     console.log("Executing Query:", query);
+    if (formattedBranchName) conditions.push(`"Branch_ID" = '${formattedBranchName}'`);
+    if (formattedRegionName) conditions.push(`"region" = '${formattedRegionName}'`);
 
-//     const data = await generateReportData(query);
-//     if (!data || data.length === 0) {
-//       console.warn("No data returned from Athena.");
-//       return res.status(200).json({ success: false, message: "No report available" });
-//     }
+    if (conditions.length > 0) query += " WHERE " + conditions.join(" AND ");
 
-//     if (responseType === "json") {
-//       return res.json({ success: true, data });
-//     }
+    console.log("🚀 Executing Athena Query:", query);
+    const result = await executeAthenaQuery(query);
 
-//     const filePath = await createReportFile(data, filename);
-//     if (!filePath) {
-//       return res.status(500).json({ success: false, message: "Failed to generate report file" });
-//     }
+    if (!result || result.length === 0) {
+      console.warn("⚠️ Athena Query Returned No Data.");
+      return [];
+    }
 
-//     console.log("Report file generated:", filePath);
-//     return res.download(filePath);
-//   } catch (error) {
-//     console.error("Report generation error:", error);
-//     return res.status(500).json({ success: false, message: "Report generation failed" });
-//   }
-// };
+    console.log("✅ Athena Query Result:", result);
+    return result;
+  } catch (error) {
+    console.error("❌ Error generating foreclosure report:", error);
+    throw error;
+  }
+}
 
-// // Report functions
-// const generateLoanApplicationReport = async (branches, appStatus, startDate, endDate, res, responseType = "csv") => {
-//   let query = `SELECT * FROM srifin_loan_applications_standardised WHERE 1=1`;
+async function generateBorrowerMasterReport(branchName) {
+  try {
+    console.log("🔍 Received Branch Name:", branchName, "| Type:", typeof branchName);
 
-//   if (branches) {
-//     query += ` AND "branch name" = ${formatValue(branches)}`;
-//   }
-//   if (appStatus) {
-//     query += ` AND "app_status" = ${formatValue(appStatus)}`;
-//   }
-//   if (startDate && endDate) {
-//     query += ` AND CAST("app_date" AS DATE) BETWEEN DATE ${formatValue(startDate)} AND DATE ${formatValue(endDate)}`;
-//   }
+    if (branchName && typeof branchName !== "string") {
+      console.error("❌ ERROR: branchName should be a string, received:", typeof branchName, branchName);
+      return [];
+    }
 
-//   return handleReportRequest(query, "LoanApplicationReport", res, responseType);
-// };
+    const formattedBranchName = branchName ? branchName.replace(/'/g, "''") : null;
 
-// const generateBorrowerMasterReport = async (branches, clusters, res, responseType = "csv") => {
-//   let query = `SELECT * FROM srifin_customer_master WHERE 1=1`;
+    let query = `SELECT * FROM srifin_customer_master`;
+    if (formattedBranchName) {
+      query += ` WHERE "branch name" = '${formattedBranchName}'`;
+    }
 
-//   if (branches) {
-//     query += ` AND "branch name" = ${formatValue(branches)}`;
-//   }
-//   if (clusters) {
-//     query += ` AND "cluster name" = ${formatValue(clusters)}`;
-//   }
+    console.log("🚀 Executing Athena Query:", query);
+    const result = await executeAthenaQuery(query);
 
-//   return handleReportRequest(query, "BorrowerMasterReport", res, responseType);
-// };
+    console.log("✅ Raw Athena Response:", result, "| Type:", typeof result);
 
-// const generateCreditReport = async (branches, creditAppStatus, startDate, endDate, res, responseType = "csv") => {
-//   let query = `SELECT * FROM vw_process_credit_report WHERE 1=1`;
+    if (!result || !Array.isArray(result) || result.length === 0) {
+      console.warn("⚠️ Athena Query Returned No Data.");
+      return [];
+    }
 
-//   if (branches) {
-//     query += ` AND "BranchID_Name" = ${formatValue(branches)}`;
-//   }
-//   if (creditAppStatus) {
-//     query += ` AND "Credit_App_Status" = ${formatValue(creditAppStatus)}`;
-//   }
-//   if (startDate && endDate) {
-//     query += ` AND CAST("app_date" AS DATE) BETWEEN DATE ${formatValue(startDate)} AND DATE ${formatValue(endDate)}`;
-//   }
+    return result;
+  } catch (error) {
+    console.error("❌ Error generating Borrower Master Report:", error);
+    throw error;
+  }
+}
 
-//   return handleReportRequest(query, "CreditReport", res, responseType);
-// };
+async function generateCreditReport(branchID, creditAppStatus, startDate, endDate) {
+  try {
+    console.log("🔍 Received Params:", { branchID, creditAppStatus, startDate, endDate });
 
-// const generateForeClosureReport = async (branches, regions, res, responseType = "csv") => {
-//   const query = `
-//     SELECT * FROM vw_preclosure_report
-//     WHERE "Branch_ID" = ${formatValue(branches)}
-//     AND "region" = ${formatValue(regions)}
-//   `;
-//   return handleReportRequest(query, "ForeClosureReport", res, responseType);
-// };
+    if (!branchID || !startDate || !endDate) {
+      console.error("❌ ERROR: Missing required parameters");
+      return [];
+    }
 
-// const generateEmployeeMasterReport = async (branches, areas, regions, clusters, employeeStatuses, res, responseType = "csv") => {
-//   // Start building the base query
-//   let query = `SELECT * FROM vw_srifin_employee_master_report WHERE 1=1`;
+    let query = `
+      SELECT * FROM srifincredit_views.vw_process_credit_report
+      WHERE "BranchID_Name" = '${branchID}'
+      AND "app_date" BETWEEN '${startDate}' AND '${endDate}'
+    `;
 
-//   // Dynamically add conditions based on provided parameters
-//   if (branches) {
-//     query += ` AND "BranchID_Name" = ${formatValue(branches)}`;
-//   }
-//   if (areas) {
-//     query += ` AND "AreaID_Name" = ${formatValue(areas)}`;
-//   }
-//   if (regions) {
-//     query += ` AND "RegionID_Name" = ${formatValue(regions)}`;
-//   }
-//   if (clusters) {
-//     query += ` AND "ClusterID_Name" = ${formatValue(clusters)}`;
-//   }
-//   if (employeeStatuses) {
-//     query += ` AND "Employee_Status" = ${formatValue(employeeStatuses)}`;
-//   }
+    if (creditAppStatus) {
+      query += ` AND "Credit_App_Status" = '${creditAppStatus}'`;
+    }
 
-//   // Call the function to handle the report request with the constructed query
-//   return handleReportRequest(query, "EmployeeMasterReport", res, responseType);
-// };
+    console.log("🚀 Executing Athena Query:", query);
+    const result = await executeAthenaQuery(query);
+
+    if (!result) {
+      console.error("❌ ERROR: Athena query returned undefined or null");
+      return [];
+    }
+
+    if (!Array.isArray(result)) {
+      console.error("❌ ERROR: Athena response is not an array! Received type:", typeof result, "Data:", result);
+      return [];
+    }
+
+    console.log("✅ Athena Query Result:", result);
+    return result;
+  } catch (error) {
+    console.error("❌ Error generating Credit Report:", error);
+    throw error;
+  }
+}
+async function generateLoanApplicationReport(branchName, appStatus, appDate) {
+  try {
+    if (!branchName || !appDate?.start || !appDate?.end) {
+      throw new Error("Branch Name, Start Date, and End Date are required");
+    }
+
+    const formattedBranchName = branchName.replace(/'/g, "''");
+    const formattedStartDate = appDate.start.replace(/'/g, "''");
+    const formattedEndDate = appDate.end.replace(/'/g, "''");
+
+    let query = `
+      SELECT * FROM srifincredit_views.srifin_loan_applications_standardised
+      WHERE "branch name" = '${formattedBranchName}'
+      AND CAST("app_date" AS DATE) BETWEEN DATE '${formattedStartDate}' AND DATE '${formattedEndDate}'
+    `;
+
+    if (Array.isArray(appStatus) && appStatus.length > 0) {
+      const formattedStatuses = appStatus.map(status => `'${status.replace(/'/g, "''")}'`).join(", ");
+      query += ` AND "app_status" IN (${formattedStatuses})`;
+    }
+
+    console.log("🚀 Executing Athena Query:", query);
+    const result = await executeAthenaQuery(query);
+
+    // Ensure result is an array, otherwise return an empty array
+    const processedResult = Array.isArray(result) ? result : [];
+
+    return processedResult;
+  } catch (error) {
+    console.error("❌ Error generating Loan Application Report:", error);
+    throw error;
+  }
+}
+// Assuming you're using an asynchronous function to handle the report generation
+async function generateEmployeeMasterReport(filters) {
+  const { branchID, areaID, regionID, clusterID, employeeStatus } = filters;
+
+  // Ensure branchID is required
+  if (!branchID) {
+    console.error("❌ ERROR: Missing required parameter: branchID");
+    return [];
+  }
+
+  // Start building the query with the branch filter
+  let query = `SELECT * FROM srifincredit_views.vw_srifin_employee_master_report WHERE "BranchID_Name" = '${branchID}'`;
+
+  // Add filters dynamically based on provided data
+  let conditions = [];
+
+  if (areaID) {
+    conditions.push(`"AreaID_Name" = '${areaID}'`);
+  }
+
+  if (regionID) {
+    conditions.push(`"RegionID_Name" = '${regionID}'`);
+  }
+
+  if (clusterID) {
+    conditions.push(`"ClusterID_Name" = '${clusterID}'`);
+  }
+
+  if (employeeStatus && employeeStatus.length > 0) {
+    const statusConditions = employeeStatus.map(status => `"Employee_Status" = '${status}'`).join(" OR ");
+    conditions.push(`(${statusConditions})`);
+  }
+
+  // If there are additional conditions, add them to the query
+  if (conditions.length > 0) {
+    query += ` AND ${conditions.join(" AND ")}`;
+  }
+
+  // Log the final query for debugging
+  console.log("🚀 Executing Athena Query:", query);
+
+  // Execute the query with Athena (assuming a query execution function exists)
+  try {
+    const result = await executeAthenaQuery(query); // Assuming executeAthenaQuery is a function that executes the Athena query
+    return result;
+  } catch (error) {
+    console.error("❌ ERROR executing query:", error);
+    return [];
+  }
+}
 
 
 
-// const generateDeathReport = async (branches, clusters, regions, res, responseType = "csv") => {
-//   const query = `
-//     SELECT * FROM vw_own_death_report
-//     WHERE "Branch" = ${formatValue(branches)}
-//     AND "Cluster" = ${formatValue(clusters)}
-//     AND "Region" = ${formatValue(regions)}
-//   `;
-//   return handleReportRequest(query, "DeathReport", res, responseType);
-// };
-// module.exports = {
-//   generateLoanApplicationReport,
-//   generateBorrowerMasterReport,
-//   generateCreditReport,
-//   generateForeClosureReport,
-//   generateEmployeeMasterReport,
-//   generateDeathReport,
-// };
+// Function to generate death report
+async function generateDeathReport(filters) {
+  const { Cluster, Region, Branch } = filters;
+
+  // Ensure at least one required parameter is provided
+  if (!Cluster && !Region && !Branch) {
+    console.error("❌ ERROR: At least one of Cluster, Region, or Branch is required");
+    return [];
+  }
+
+  // Start building the query with the base selection
+  let query = `SELECT * FROM srifincredit_views.vw_own_death_report`;
+
+  // Initialize conditions array for dynamic filters
+  let conditions = [];
+
+  // Add conditions based on the filters provided
+  if (Cluster) {
+    conditions.push(`"Cluster" = '${Cluster.replace(/'/g, "''")}'`);
+  }
+
+  if (Region) {
+    conditions.push(`"Region" = '${Region.replace(/'/g, "''")}'`);
+  }
+
+  if (Branch) {
+    conditions.push(`"Branch" = '${Branch.replace(/'/g, "''")}'`);
+  }
+
+  // If there are any conditions, add them to the WHERE clause
+  if (conditions.length > 0) {
+    query += ` WHERE ${conditions.join(" AND ")}`;
+  }
+
+  // Log the final query for debugging purposes
+  console.log("🚀 Executing Athena Query:", query);
+
+  // Execute the query with Athena
+  try {
+    const result = await executeAthenaQuery(query); // Assuming executeAthenaQuery is a function that executes the Athena query
+    return result;
+  } catch (error) {
+    console.error("❌ ERROR executing query:", error);
+    return [];
+  }
+}
+
+
+module.exports = { 
+  generateForeClosureReport, 
+  generateBorrowerMasterReport,
+  generateCreditReport,
+  generateLoanApplicationReport,
+  generateEmployeeMasterReport,
+  generateDeathReport // ✅ Added Death Report Function
+};
+
+

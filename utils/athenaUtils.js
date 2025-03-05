@@ -1,41 +1,63 @@
-const AWS = require("aws-sdk");
-const athena = new AWS.Athena();
+require("dotenv").config();
+
+const { 
+  AthenaClient, 
+  StartQueryExecutionCommand, 
+  GetQueryExecutionCommand, 
+  GetQueryResultsCommand 
+} = require("@aws-sdk/client-athena");
+
+const athenaClient = new AthenaClient({ 
+  region: process.env.AWS_REGION // Ensure region is set correctly
+});
 
 const executeAthenaQuery = async (query) => {
   const params = {
     QueryString: query,
-    QueryExecutionContext: { Database: "srifincredit_views" },
-    ResultConfiguration: { OutputLocation: "s3://sfin-reporting-layer-logs/MIS_Query_Logs" },
+    QueryExecutionContext: { Database: process.env.ATHENA_DATABASE }, // Use env variable
+    ResultConfiguration: { OutputLocation: process.env.ATHENA_OUTPUT_LOCATION }, // Use env variable
   };
 
-  const { QueryExecutionId } = await athena.startQueryExecution(params).promise();
-  let queryStatus;
+  try {
+    const { QueryExecutionId } = await athenaClient.send(new StartQueryExecutionCommand(params));
+    console.log(`✅ Query Started: ${QueryExecutionId}`);
 
-  do {
-    const result = await athena.getQueryExecution({ QueryExecutionId }).promise();
-    queryStatus = result.QueryExecution.Status.State;
-    if (queryStatus === "FAILED" || queryStatus === "CANCELLED") {
-      throw new Error(result.QueryExecution.Status.StateChangeReason);
+    let queryStatus;
+
+    do {
+      const result = await athenaClient.send(new GetQueryExecutionCommand({ QueryExecutionId }));
+      queryStatus = result.QueryExecution.Status.State;
+
+      if (queryStatus === "FAILED" || queryStatus === "CANCELLED") {
+        throw new Error(result.QueryExecution.Status.StateChangeReason);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 3000)); // Wait before checking again
+    } while (queryStatus === "RUNNING" || queryStatus === "QUEUED");
+
+    const results = await athenaClient.send(new GetQueryResultsCommand({ QueryExecutionId }));
+
+    if (!results.ResultSet.Rows || results.ResultSet.Rows.length <= 1) {
+      console.warn("⚠️ Athena query returned no data.");
+      return null;
     }
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-  } while (queryStatus === "RUNNING" || queryStatus === "QUEUED");
 
-  const results = await athena.getQueryResults({ QueryExecutionId }).promise();
-  
-  if (!results || !results.ResultSet || !results.ResultSet.Rows || results.ResultSet.Rows.length <= 1) {
-    console.warn("Athena query returned no data.");
-    return null;
+    // Extract headers from the first row
+    const headers = results.ResultSet.Rows[0].Data.map((col) => col.VarCharValue || "");
+    
+    // Convert rows into JSON format
+    const data = results.ResultSet.Rows.slice(1).map((row) =>
+      row.Data.reduce((acc, col, i) => {
+        acc[headers[i]] = col.VarCharValue || "";
+        return acc;
+      }, {})
+    );
+
+    return data.length > 0 ? data : null;
+  } catch (error) {
+    console.error("❌ Athena Query Error:", error.message);
+    throw new Error(`Athena Query Error: ${error.message}`);
   }
-
-  const headers = results.ResultSet.Rows[0].Data.map((col) => col.VarCharValue || "");
-  const data = results.ResultSet.Rows.slice(1).map((row) =>
-    row.Data.reduce((acc, col, i) => {
-      acc[headers[i]] = col.VarCharValue || "";
-      return acc;
-    }, {})
-  );
-
-  return data.length > 0 ? data : null;
 };
 
 module.exports = { executeAthenaQuery };
